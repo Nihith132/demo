@@ -12,3 +12,7 @@ pypdf
 passlib[bcrypt]
 PyJWT
 psycopg2-binary
+
+# Embeddings (local, Hugging Face)
+sentence-transformers
+torch

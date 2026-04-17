@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
-from routers import auth, doctors, patient, patient_auth
+from routers import auth, doctors, patient, patient_auth, vectors
 from routers import files as files_router
 
 Base.metadata.create_all(bind=engine)
@@ -15,7 +15,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS for local dev (Next.js on :3000 calling FastAPI on :8002)
+# CORS for local dev (Next.js on :3000 calling FastAPI on :8000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -32,6 +32,7 @@ app.include_router(doctors.router, prefix="/api/doctors", tags=["Doctors"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(patient_auth.router, prefix="/api/patient-auth", tags=["Patient Auth"])
 app.include_router(files_router.router, prefix="/api/files", tags=["Files"])
+app.include_router(vectors.router, prefix="/api/vectors", tags=["Vector Store"])
 
 
 @app.get("/health")
