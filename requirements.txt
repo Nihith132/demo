@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+groq
+langgraph
+langchain-core
+pydantic>=2.0
+sqlalchemy
+python-multipart
+python-dotenv
+aiofiles
+pypdf
+passlib[bcrypt]
+PyJWT
+firebase-admin
+psycopg2-binary
