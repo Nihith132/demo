@@ -1,62 +1,88 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models.db_models import PatientUser
-from utils.firebase_auth import verify_firebase_id_token
+from utils.security import create_access_token, decode_access_token, hash_password, verify_password
 
 router = APIRouter()
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/patient-auth/login")
+
+
+class PatientRegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=6)
+    display_name: str | None = None
+    email: str | None = None
+
 
 def get_current_patient(
-    authorization: str | None = Header(default=None),
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> PatientUser:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
-
-    token = authorization.split(" ", 1)[1].strip()
     try:
-        decoded = verify_firebase_id_token(token)
+        payload = decode_access_token(token)
+        sub = payload.get("sub")
+        if not sub:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        patient_user_id = int(sub)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Firebase token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    firebase_uid = decoded.get("uid")
-    if not firebase_uid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Firebase token")
-
-    user = db.query(PatientUser).filter(PatientUser.firebase_uid == firebase_uid).first()
+    user = db.query(PatientUser).filter(PatientUser.id == patient_user_id).first()
     if user is None:
-        user = PatientUser(
-            firebase_uid=firebase_uid,
-            email=decoded.get("email"),
-            display_name=decoded.get("name") or decoded.get("displayName"),
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     return user
 
 
-@router.post("/session")
-def create_patient_session(current_patient: PatientUser = Depends(get_current_patient)):
-    """Validates Firebase ID token and ensures a PatientUser exists."""
-    return {
-        "patient_user_id": current_patient.id,
-        "firebase_uid": current_patient.firebase_uid,
-        "email": current_patient.email,
-        "display_name": current_patient.display_name,
-    }
+@router.post("/register")
+def register(payload: PatientRegisterRequest, db: Session = Depends(get_db)):
+    existing = db.query(PatientUser).filter(PatientUser.username == payload.username).first()
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    user = PatientUser(
+        username=payload.username,
+        password_hash=hash_password(payload.password),
+        display_name=payload.display_name,
+        email=payload.email,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(subject=str(user.id))
+    return {"access_token": token, "token_type": "bearer", "patient_user_id": user.id}
+
+
+@router.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(PatientUser).filter(PatientUser.username == form_data.username).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    token = create_access_token(subject=str(user.id))
+    return {"access_token": token, "token_type": "bearer", "patient_user_id": user.id}
 
 
 @router.get("/me")
 def me(current_patient: PatientUser = Depends(get_current_patient)):
     return {
         "id": current_patient.id,
-        "firebase_uid": current_patient.firebase_uid,
-        "email": current_patient.email,
+        "username": current_patient.username,
         "display_name": current_patient.display_name,
+        "email": current_patient.email,
     }
+
+
+@router.post("/logout")
+def logout():
+    return {"status": "ok"}

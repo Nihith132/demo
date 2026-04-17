@@ -45,7 +45,7 @@ async def patient_submit(
     Creates PatientRecord(status='processing') and starts background processing
     to extract PDF text and choose a department.
 
-    Requires Firebase Auth (patient) so we can store per-user history.
+    Requires patient JWT auth so we can store per-user history.
     """
 
     patient_id = str(uuid.uuid4())
@@ -60,9 +60,7 @@ async def patient_submit(
         from utils.supabase_storage import upload_pdf_bytes
 
         up = upload_pdf_bytes(content=pdf_bytes, original_filename=pdf.filename or "document.pdf")
-        uploaded_uris.append(
-            f"supabase://{up.bucket}/{up.object_path}"
-        )
+        uploaded_uris.append(f"supabase://{up.bucket}/{up.object_path}")
     except Exception:
         # Save PDF locally for MVP fallback.
         _ensure_upload_dir()

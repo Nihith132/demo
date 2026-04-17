@@ -11,5 +11,4 @@ aiofiles
 pypdf
 passlib[bcrypt]
 PyJWT
-firebase-admin
 psycopg2-binary

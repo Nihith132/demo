@@ -12,9 +12,15 @@ class PatientUser(Base):
     __tablename__ = "patient_users"
 
     id = Column(Integer, primary_key=True, index=True)
-    firebase_uid = Column(String, unique=True, index=True, nullable=False)
-    email = Column(String, nullable=True)
+
+    # Auth (MVP)
+    # Username is the patient's login identifier.
+    username = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+
+    # Optional profile fields
     display_name = Column(String, nullable=True)
+    email = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
